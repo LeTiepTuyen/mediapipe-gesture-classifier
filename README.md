@@ -423,9 +423,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 📧 Contact
 
 For questions or collaboration:
-- **Team Lead**: Le Tiep Tuyen (22020015)
-- **Email**: [your-email@example.com]
-- **GitHub**: [https://github.com/your-username/mediapipe-gesture-classifier](https://github.com/your-username/mediapipe-gesture-classifier)
+- **Team Lead**: Le Tiep Tuyen
+- **Email**: [tuyentieple@gmail.com](mailto:tuyentieple@gmail.com)
+- **GitHub**: [https://github.com/LeTiepTuyen/mediapipe-gesture-classifier](https://github.com/LeTiepTuyen/mediapipe-gesture-classifier?tab=readme-ov-file)
 
 ---
 
