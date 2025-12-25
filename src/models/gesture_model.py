@@ -34,16 +34,29 @@ def load_labels(label_path: Path) -> list[str]:
     return labels
 
 
-def train_evalute(
-    data_path: str | Path = "../keypoint.csv",
-    label_path: str | Path = "../keypoint_classifier_label.csv",
+def train_evaluate(
+    data_path: str | Path = "../../data/keypoints.csv",
+    label_path: str | Path = "../../data/labels.csv",
+    model_save_path: str | Path = "./best_model.pth",
     epochs: int = 200,
     patience: int = 5,
     batch_size: int = 128,
     lr: float = 0.001,
 ):
+    """Train and evaluate the hand gesture recognition model.
+    
+    Args:
+        data_path: Path to keypoints CSV file
+        label_path: Path to labels CSV file
+        model_save_path: Path where to save the trained model
+        epochs: Maximum number of training epochs
+        patience: Early stopping patience
+        batch_size: Training batch size
+        lr: Learning rate
+    """
     data_path = Path(data_path)
     label_path = Path(label_path)
+    model_save_path = Path(model_save_path)
 
     labels = load_labels(label_path)
     num_classes = len(labels)
@@ -127,7 +140,7 @@ def train_evalute(
                 "num_classes": num_classes,
                 "labels": labels,
             }
-            torch.save(checkpoint, "best_model.pth")
+            torch.save(checkpoint, model_save_path)
             no_improve = 0
             print("Model improved and saved!")
         else:
@@ -137,7 +150,7 @@ def train_evalute(
                 break
 
     # Evaluate best model
-    checkpoint = torch.load("best_model.pth", map_location=device)
+    checkpoint = torch.load(model_save_path, map_location=device)
     best_model = Hand_Gesture_Model(checkpoint["num_classes"]).to(device)
     best_model.load_state_dict(checkpoint["state_dict"])
     best_model.eval()
@@ -157,4 +170,4 @@ def train_evalute(
 
 
 if __name__ == "__main__":
-    train_evalute()
+    train_evaluate()

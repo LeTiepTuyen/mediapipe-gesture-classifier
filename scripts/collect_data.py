@@ -1,17 +1,42 @@
+"""Data collection tool for gesture training dataset.
+
+This script captures hand landmarks from webcam and saves them to a CSV file.
+The captured data is preprocessed using the same pipeline as inference.
+
+Controls:
+  [0..9]   Select label index
+  SPACE    Save single sample for current label
+  C        Toggle continuous capture (captures ~10 samples/sec)
+  R        Reset (delete all samples for current label)
+  N / B    Next / Previous label
+  H        Show help
+  ESC      Exit
+"""
+
+import sys
 from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import csv
 import time
 import cv2 as cv
 from mediapipe import solutions
-from utils.preprocessing import calculate_Hands_Coordinates, pre_process_landmark
 
-LABEL_FILE = Path("keypoint_classifier_label.csv")
-CSV_FILE = Path("keypoint.csv")
+from src.utils.preprocessing import calculate_Hands_Coordinates, pre_process_landmark
+
+# Updated paths for new src/ structure
+LABEL_FILE = Path("data/labels.csv")
+CSV_FILE = Path("data/keypoints.csv")
+
+# Ensure data directory exists
+CSV_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 # Load labels dynamically
 labels = [line.strip() for line in LABEL_FILE.read_text(encoding='utf-8-sig').splitlines() if line.strip()]
 if not labels:
-    raise RuntimeError("No labels found in keypoint_classifier_label.csv")
+    raise RuntimeError("No labels found in data/labels.csv")
 
 mp_hands = solutions.hands
 hands = mp_hands.Hands(
@@ -38,7 +63,14 @@ Labels:
 
 
 def count_samples(label_idx: int) -> int:
-    """Count number of samples for a specific label"""
+    """Count number of samples for a specific label.
+    
+    Args:
+        label_idx: Class index to count samples for
+        
+    Returns:
+        Number of samples found for the label
+    """
     if not CSV_FILE.exists():
         return 0
     count = 0
@@ -51,7 +83,14 @@ def count_samples(label_idx: int) -> int:
 
 
 def reset_samples(label_idx: int) -> int:
-    """Delete all samples for a specific label. Returns number of deleted samples."""
+    """Delete all samples for a specific label.
+    
+    Args:
+        label_idx: Class index to reset
+        
+    Returns:
+        Number of samples deleted
+    """
     if not CSV_FILE.exists():
         return 0
     
@@ -75,6 +114,13 @@ def reset_samples(label_idx: int) -> int:
 
 
 def save_row(label_idx: int, landmarks, frame) -> None:
+    """Save a single preprocessed gesture sample to CSV.
+    
+    Args:
+        label_idx: Class index for this gesture
+        landmarks: MediaPipe hand landmarks
+        frame: Current video frame (for coordinate system reference)
+    """
     # Extract landmarks as list of [x, y]
     pts = [[lm.x, lm.y] for lm in landmarks]
     
@@ -94,6 +140,7 @@ def save_row(label_idx: int, landmarks, frame) -> None:
 
 
 def main():
+    """Main data collection loop."""
     cap = cv.VideoCapture(0)
     if not cap.isOpened():
         raise RuntimeError("Failed to open webcam")

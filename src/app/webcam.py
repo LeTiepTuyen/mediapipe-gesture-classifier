@@ -2,23 +2,36 @@ from pathlib import Path
 import cv2 as cv
 from mediapipe import solutions
 import torch
-from utils.preprocessing import calculate_Hands_Coordinates, pre_process_landmark
 import sys
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+# Import preprocessing functions from src.utils
+from src.utils.preprocessing import calculate_Hands_Coordinates, pre_process_landmark
+
+# Import model class from src.models
+from src.models.gesture_model import Hand_Gesture_Model
+
+# Expose the class at the name pickle expects (for backward compatibility)
+sys.modules['__main__'].Hand_Gesture_Model = Hand_Gesture_Model
+sys.modules['__main__'].Hand_Gesture = Hand_Gesture_Model
 
 # MediaPipe setup
 mp_hands = solutions.hands
 drawing = solutions.drawing_utils
 drawing_styles = solutions.drawing_styles
 
-# Import model class
-from Models.gesture_model import Hand_Gesture_Model
-
-# Expose the class at the name pickle expects (for backward compatibility)
-sys.modules['__main__'].Hand_Gesture_Model = Hand_Gesture_Model
-sys.modules['__main__'].Hand_Gesture = Hand_Gesture_Model
-
 
 def load_labels(label_path: Path) -> list[str]:
+    """Load gesture labels from CSV file with UTF-8 BOM handling.
+    
+    Args:
+        label_path: Path to labels CSV file
+        
+    Returns:
+        List of gesture label strings
+    """
     label_path = Path(label_path)
     try:
         # Use utf-8-sig to automatically strip BOM if present
@@ -30,6 +43,16 @@ def load_labels(label_path: Path) -> list[str]:
 
 
 def load_model(checkpoint_path: Path, device: str, labels: list[str]) -> tuple[torch.nn.Module, list[str]]:
+    """Load trained gesture model from checkpoint.
+    
+    Args:
+        checkpoint_path: Path to model checkpoint file
+        device: Device to load model on ('cpu' or 'cuda')
+        labels: Fallback gesture labels if not in checkpoint
+        
+    Returns:
+        Tuple of (model in eval mode, gesture labels)
+    """
     obj = torch.load(checkpoint_path, map_location=device)
 
     # New checkpoint format with state_dict & metadata
@@ -53,7 +76,17 @@ def load_model(checkpoint_path: Path, device: str, labels: list[str]) -> tuple[t
 
 
 def init_webcam(width=640, height=480, max_hands=2, default_webcam=0):
-    """Initialize webcam with optimized settings"""
+    """Initialize webcam with optimized settings for gesture recognition.
+    
+    Args:
+        width: Webcam frame width (default 640)
+        height: Webcam frame height (default 480)
+        max_hands: Maximum number of hands to detect (default 2)
+        default_webcam: Camera index (default 0)
+        
+    Returns:
+        Tuple of (cv.VideoCapture, mediapipe Hands)
+    """
     cap = cv.VideoCapture(default_webcam)
     
     # Set optimized resolution (lower = faster)
@@ -77,11 +110,20 @@ def init_webcam(width=640, height=480, max_hands=2, default_webcam=0):
 
 
 def functional_hand_hand_gesture_webcam():
-    """Real-time hand gesture recognition with optimized performance"""
+    """Real-time hand gesture recognition with optimized performance.
+    
+    Captures video from webcam, detects hands, preprocesses landmarks,
+    and displays predicted gesture class with confidence score.
+    
+    Press ESC to exit.
+    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    MODEL_PATH = Path("Models/best_model.pth")
-    LABEL_PATH = Path("keypoint_classifier_label.csv")
+    # Updated paths for new src/ structure
+    # MODEL_PATH points to src/models/checkpoints/best_model.pth
+    # LABEL_PATH points to data/labels.csv
+    MODEL_PATH = Path("src/models/checkpoints/best_model.pth")
+    LABEL_PATH = Path("data/labels.csv")
 
     labels = load_labels(LABEL_PATH)
     model, labels = load_model(MODEL_PATH, device, labels)
@@ -156,10 +198,3 @@ def functional_hand_hand_gesture_webcam():
     cv.destroyAllWindows()
     hands.close()
     print("Webcam closed")
-
-
-
-
-
-
-
