@@ -21,7 +21,8 @@ sys.modules['__main__'].Hand_Gesture = Hand_Gesture_Model
 def load_labels(label_path: Path) -> list[str]:
     label_path = Path(label_path)
     try:
-        labels = [line.strip() for line in label_path.read_text().splitlines() if line.strip()]
+        # Use utf-8-sig to automatically strip BOM if present
+        labels = [line.strip() for line in label_path.read_text(encoding='utf-8-sig').splitlines() if line.strip()]
     except FileNotFoundError:
         # Fallback to legacy 4 gestures if label file missing
         labels = ["Open", "Close", "Pointer", "OK"]

@@ -27,7 +27,8 @@ class Hand_Gesture_Model(nn.Module):
 
 def load_labels(label_path: Path) -> list[str]:
     label_path = Path(label_path)
-    labels = [line.strip() for line in label_path.read_text().splitlines() if line.strip()]
+    # Use utf-8-sig to automatically strip BOM if present
+    labels = [line.strip() for line in label_path.read_text(encoding='utf-8-sig').splitlines() if line.strip()]
     if not labels:
         raise ValueError(f"No labels found in {label_path}")
     return labels

@@ -3,12 +3,13 @@ import csv
 import time
 import cv2 as cv
 from mediapipe import solutions
+from utils.preprocessing import calculate_Hands_Coordinates, pre_process_landmark
 
 LABEL_FILE = Path("keypoint_classifier_label.csv")
 CSV_FILE = Path("keypoint.csv")
 
 # Load labels dynamically
-labels = [line.strip() for line in LABEL_FILE.read_text().splitlines() if line.strip()]
+labels = [line.strip() for line in LABEL_FILE.read_text(encoding='utf-8-sig').splitlines() if line.strip()]
 if not labels:
     raise RuntimeError("No labels found in keypoint_classifier_label.csv")
 
@@ -27,6 +28,7 @@ Controls:
   [0..9]   Select label index
   SPACE    Save single sample for current label
   C        Toggle continuous capture (captures ~10 samples/sec)
+  R        Reset (delete all samples for current label)
   N / B    Next / Previous label
   H        Show help
   ESC      Exit
@@ -35,12 +37,57 @@ Labels:
 """ + "\n".join([f"  {i}: {name}" for i, name in enumerate(labels)])
 
 
-def save_row(label_idx: int, landmarks) -> None:
-    row = [label_idx]
-    for lm in landmarks:
-        row.extend([lm.x, lm.y])  # normalized coords
+def count_samples(label_idx: int) -> int:
+    """Count number of samples for a specific label"""
+    if not CSV_FILE.exists():
+        return 0
+    count = 0
+    with CSV_FILE.open("r", newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if row and int(row[0]) == label_idx:
+                count += 1
+    return count
+
+
+def reset_samples(label_idx: int) -> int:
+    """Delete all samples for a specific label. Returns number of deleted samples."""
+    if not CSV_FILE.exists():
+        return 0
+    
+    rows_to_keep = []
+    deleted_count = 0
+    
+    with CSV_FILE.open("r", newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if row and int(row[0]) == label_idx:
+                deleted_count += 1
+            else:
+                rows_to_keep.append(row)
+    
+    # Rewrite file without deleted samples
+    with CSV_FILE.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerows(rows_to_keep)
+    
+    return deleted_count
+
+
+def save_row(label_idx: int, landmarks, frame) -> None:
+    # Extract landmarks as list of [x, y]
+    pts = [[lm.x, lm.y] for lm in landmarks]
+    
+    # Apply SAME preprocessing as webcam.py
+    coords = calculate_Hands_Coordinates(frame, pts)
+    feat = pre_process_landmark(coords)
+    
+    # Save preprocessed features
+    row = [label_idx] + feat.tolist()
+    
     if len(row) != 1 + 42:  # 21 landmarks * 2
         return
+    
     with CSV_FILE.open("a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(row)
@@ -54,6 +101,7 @@ def main():
     current_label = 0
     continuous = False
     last_capture = 0.0
+    sample_count = count_samples(current_label)  # Track samples for current label
     print(HELP)
 
     while cap.isOpened():
@@ -71,16 +119,19 @@ def main():
             now = time.time()
             # Continuous capture ~10 samples/sec
             if continuous and (now - last_capture) > 0.1:
-                save_row(current_label, hand_landmarks.landmark)
+                save_row(current_label, hand_landmarks.landmark, frame)
+                sample_count += 1
                 last_capture = now
 
-        # Overlay UI
+        # Overlay UI with sample count
         cv.putText(frame, f"Label: {current_label} - {labels[current_label]}", (10, 30),
                    cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv.LINE_AA)
-        cv.putText(frame, f"Continuous: {'ON' if continuous else 'OFF'}", (10, 60),
+        cv.putText(frame, f"Samples: {sample_count}", (10, 60),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2, cv.LINE_AA)
+        cv.putText(frame, f"Continuous: {'ON' if continuous else 'OFF'}", (10, 90),
                    cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2, cv.LINE_AA)
-        cv.putText(frame, "SPACE=save, C=toggle, N/B=label, ESC=quit", (10, 90),
-                   cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv.LINE_AA)
+        cv.putText(frame, "SPACE=save | C=toggle | R=reset | N/B=label | ESC=quit", (10, 120),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv.LINE_AA)
 
         cv.imshow("Collect Gestures", frame)
         key = cv.waitKey(1) & 0xFF
@@ -92,17 +143,26 @@ def main():
         elif key == ord('c') or key == ord('C'):
             continuous = not continuous
             last_capture = 0.0
+        elif key == ord('r') or key == ord('R'):
+            # Reset samples for current label
+            deleted = reset_samples(current_label)
+            sample_count = 0
+            print(f"Reset: Deleted {deleted} samples for label {current_label} - {labels[current_label]}")
         elif key == ord('n') or key == ord('N'):
             current_label = (current_label + 1) % len(labels)
+            sample_count = count_samples(current_label)  # Update count for new label
         elif key == ord('b') or key == ord('B'):
             current_label = (current_label - 1) % len(labels)
+            sample_count = count_samples(current_label)  # Update count for new label
         elif key == ord(' '):  # SPACE save single sample
             if res.multi_hand_landmarks:
-                save_row(current_label, res.multi_hand_landmarks[0].landmark)
+                save_row(current_label, res.multi_hand_landmarks[0].landmark, frame)
+                sample_count += 1
         elif ord('0') <= key <= ord('9'):
             idx = key - ord('0')
             if idx < len(labels):
                 current_label = idx
+                sample_count = count_samples(current_label)  # Update count for new label
 
     cap.release()
     cv.destroyAllWindows()
